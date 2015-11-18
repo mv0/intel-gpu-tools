@@ -804,9 +804,17 @@ static void show_gem_objects(struct overlay_context *ctx, struct overlay_gem_obj
 
 static int take_snapshot;
 
-static void signal_snapshot(int sig)
+static void
+signal_snapshot(int sig, siginfo_t *si, void *__unused)
 {
 	take_snapshot = sig;
+}
+
+static void
+signal_x11_destroy(int sig, siginfo_t *si, void *__unused)
+{
+	x11_overlay_stop();
+	exit(EXIT_SUCCESS);
 }
 
 static int get_sample_period(struct config *config)
@@ -854,6 +862,7 @@ int main(int argc, char **argv)
 	};
 	struct overlay_context ctx;
 	struct config config;
+	struct sigaction sa;
 	int index, sample_period;
 	int daemonize = 1, renice = 0;
 	int i;
@@ -898,14 +907,22 @@ int main(int argc, char **argv)
 	ctx.width = 640;
 	ctx.height = 236;
 	ctx.surface = NULL;
-	if (ctx.surface == NULL)
+
+	if (ctx.surface == NULL) {
 		ctx.surface = x11_overlay_create(&config, &ctx.width, &ctx.height);
-	if (ctx.surface == NULL)
+	}
+	if (ctx.surface == NULL) {
+		fprintf(stderr, "Failed to create X11 overlay.\n");
 		ctx.surface = x11_window_create(&config, &ctx.width, &ctx.height);
-	if (ctx.surface == NULL)
+	}
+	if (ctx.surface == NULL) {
+		fprintf(stderr, "Failed to create X11 window.\n");
 		ctx.surface = kms_overlay_create(&config, &ctx.width, &ctx.height);
-	if (ctx.surface == NULL)
+	}
+	if (ctx.surface == NULL) {
+		fprintf(stderr, "Failed to create KMS overlay.\n");
 		return ENXIO;
+	}
 
 	if (daemonize && daemon(0, 0))
 		return EINVAL;
@@ -913,7 +930,20 @@ int main(int argc, char **argv)
 	if (renice && (nice(renice) == -1))
 		fprintf(stderr, "Could not renice: %s\n", strerror(errno));
 
-	signal(SIGUSR1, signal_snapshot);
+	sa.sa_flags = SA_SIGINFO;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_sigaction = &signal_snapshot;
+
+	if (sigaction(SIGUSR1, &sa, NULL) == -1) {
+		x11_overlay_stop();
+		return EXIT_FAILURE;
+	}
+
+	sa.sa_sigaction = &signal_x11_destroy;
+	if (sigaction(SIGINT | SIGTERM, &sa, NULL) == -1) {
+		x11_overlay_stop();
+		return EXIT_FAILURE;
+	}
 
 	debugfs_init();
 
