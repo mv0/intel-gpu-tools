@@ -60,7 +60,7 @@ int power_init(struct power *power)
 	memset(power, 0, sizeof(*power));
 
 	power->fd = perf_open();
-	if (power->fd != -1)
+	if (power->fd != -ENOENT)
 		return 0;
 
 	sprintf(buf, "%s/i915_energy_uJ", debugfs_dri_path);
@@ -121,7 +121,7 @@ int power_update(struct power *power)
 	if (power->error)
 		return power->error;
 
-	if (power->fd != -1) {
+	if (power->fd != -ENOENT) {
 		uint64_t data[2];
 		int len;
 
