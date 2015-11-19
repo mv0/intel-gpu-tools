@@ -803,10 +803,16 @@ static void show_gem_objects(struct overlay_context *ctx, struct overlay_gem_obj
 }
 
 static int take_snapshot;
+static int kill_window;
 
 static void signal_snapshot(int sig)
 {
 	take_snapshot = sig;
+}
+
+static void signal_kill_window(int sig)
+{
+	kill_window = sig;
 }
 
 static int get_sample_period(struct config *config)
@@ -914,6 +920,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Could not renice: %s\n", strerror(errno));
 
 	signal(SIGUSR1, signal_snapshot);
+	signal(SIGTERM, signal_kill_window);
 
 	debugfs_init();
 
@@ -960,6 +967,10 @@ int main(int argc, char **argv)
 			take_snapshot = 0;
 		}
 
+		if (kill_window) {
+			x11_overlay_stop();
+			return 0;
+		}
 		usleep(sample_period);
 	}
 
