@@ -25,6 +25,30 @@
  * 	Damien Lespiau <damien.lespiau@intel.com>
  */
 
+/**
+ * SECTION:igt_kms
+ * @short_description: Kernel modesetting support library
+ * @title: KMS
+ * @include: igt.h
+ *
+ * This library provides support to enumerate and set modeset configurations.
+ *
+ * There are two parts in this library: First the low level helper function
+ * which directly build on top of raw ioctls or the interfaces provided by
+ * libdrm. Those functions all have a kmstest_ prefix.
+ *
+ * The second part is a high-level library to manage modeset configurations
+ * which abstracts away some of the low-level details like the difference
+ * between legacy and universal plane support for setting cursors or in the
+ * future the difference between legacy and atomic commit. These high-level
+ * functions have all igt_ prefixes. This part is still very much work in
+ * progress and so also lacks a bit documentation for the individual functions.
+ *
+ * Note that this library's header pulls in the [i-g-t
+ * framebuffer](intel-gpu-tools-Framebuffer.html) library as a
+ * dependency.
+ */
+
 #ifndef __IGT_KMS_H__
 #define __IGT_KMS_H__
 
@@ -37,7 +61,6 @@
 #include "igt_fb.h"
 #include "ioctl_wrappers.h"
 
-/* Low-level helpers with kmstest_ prefix */
 
 enum pipe {
         PIPE_ANY = -1,
@@ -46,7 +69,6 @@ enum pipe {
         PIPE_C,
         I915_MAX_PIPES
 };
-const char *kmstest_pipe_name(enum pipe pipe);
 
 /* We namespace this enum to not conflict with the Android i915_drm.h */
 enum igt_plane {
@@ -57,8 +79,6 @@ enum igt_plane {
         IGT_PLANE_CURSOR,
 };
 
-const char *kmstest_plane_name(enum igt_plane plane);
-
 enum port {
         PORT_A = 0,
         PORT_B,
@@ -67,44 +87,6 @@ enum port {
         PORT_E,
         I915_MAX_PORTS
 };
-
-/**
- * kmstest_port_name:
- * @port: display plane
- *
- * Returns: String representing @port, e.g. "A".
- */
-#define kmstest_port_name(port) ((port) + 'A')
-
-/**
- * kmstest_encoder_type_str:
- * @type: DRM_MODE_ENCODER_* enumeration value
- *
- * Returns: A string representing the drm encoder @type.
- */
-const char *kmstest_encoder_type_str(int type);
-
-/**
- * kmstest_connector_status_str:
- * @status: DRM_MODE_* connector status value
- *
- * Returns: A string representing the drm connector status @status.
- */
-const char *kmstest_connector_status_str(int status);
-
-/**
- * kmstest_connector_type_str:
- * @type: DRM_MODE_CONNECTOR_* enumeration value
- *
- * Returns: A string representing the drm connector @type.
- */
-const char *kmstest_connector_type_str(int type);
-
-void kmstest_dump_mode(drmModeModeInfo *mode);
-
-int kmstest_get_pipe_from_crtc_id(int fd, int crtc_id);
-void kmstest_set_vt_graphics_mode(void);
-void kmstest_restore_vt_mode(void);
 
 struct kmstest_connector_config {
 	drmModeCrtc *crtc;
@@ -129,25 +111,6 @@ enum kmstest_force_connector_state {
 	FORCE_CONNECTOR_OFF
 };
 
-bool kmstest_force_connector(int fd, drmModeConnector *connector,
-			     enum kmstest_force_connector_state state);
-void kmstest_edid_add_3d(const unsigned char *edid, size_t length, unsigned char *new_edid_ptr[], size_t *new_length);
-void kmstest_force_edid(int drm_fd, drmModeConnector *connector,
-			const unsigned char *edid, size_t length);
-
-bool kmstest_get_connector_default_mode(int drm_fd, drmModeConnector *connector,
-					drmModeModeInfo *mode);
-bool kmstest_get_connector_config(int drm_fd, uint32_t connector_id,
-				  unsigned long crtc_idx_mask,
-				  struct kmstest_connector_config *config);
-void kmstest_free_connector_config(struct kmstest_connector_config *config);
-
-void kmstest_set_connector_dpms(int fd, drmModeConnector *connector, int mode);
-bool kmstest_get_property(int drm_fd, uint32_t object_id, uint32_t object_type,
-			  const char *name, uint32_t *prop_id, uint64_t *value,
-			  drmModePropertyPtr *prop);
-void kmstest_unset_all_crtcs(int drm_fd, drmModeResPtr resources);
-
 /*
  * A small modeset API
  */
@@ -160,8 +123,8 @@ enum igt_commit_style {
 };
 
 typedef struct igt_display igt_display_t;
-typedef struct igt_pipe igt_pipe_t;
 typedef uint32_t igt_fixed_t;			/* 16.16 fixed point */
+typedef struct igt_pipe igt_pipe_t;
 
 typedef enum {
 	/* this maps to the kernel API */
@@ -237,17 +200,300 @@ struct igt_display {
 	bool has_universal_planes;
 };
 
+/* Low-level helpers with kmstest_ prefix */
+
+/**
+ * kmstest_port_name:
+ * @port: display plane
+ *
+ * Returns: String representing @port, e.g. "A".
+ */
+#define kmstest_port_name(port) ((port) + 'A')
+
+/**
+ * kmstest_pipe_name:
+ * @pipe: display pipe
+ *
+ * Returns: String represnting @pipe, e.g. "A".
+ */
+const char *kmstest_pipe_name(enum pipe pipe);
+
+/**
+ * kmstest_plane_name:
+ * @plane: display plane
+ *
+ * Returns: String represnting @pipe, e.g. "plane1".
+ */
+const char *kmstest_plane_name(enum igt_plane plane);
+
+
+/**
+ * kmstest_encoder_type_str:
+ * @type: DRM_MODE_ENCODER_* enumeration value
+ *
+ * Returns: A string representing the drm encoder @type.
+ */
+const char *kmstest_encoder_type_str(int type);
+
+/**
+ * kmstest_connector_status_str:
+ * @status: DRM_MODE_* connector status value
+ *
+ * Returns: A string representing the drm connector status @status.
+ */
+const char *kmstest_connector_status_str(int status);
+
+/**
+ * kmstest_connector_type_str:
+ * @type: DRM_MODE_CONNECTOR_* enumeration value
+ *
+ * Returns: A string representing the drm connector @type.
+ */
+const char *kmstest_connector_type_str(int type);
+
+/**
+ * kmstest_dump_mode:
+ * @mode: libdrm mode structure
+ *
+ * Prints @mode to stdout in a huma-readable form.
+ */
+void kmstest_dump_mode(drmModeModeInfo *mode);
+
+/**
+ * kmstest_get_pipe_from_crtc_id:
+ * @fd: DRM fd
+ * @crtc_id: DRM CRTC id
+ *
+ * Returns: The pipe number for the given DRM CRTC @crtc_id. This maps directly
+ * to an enum pipe value used in other helper functions.
+ */
+int kmstest_get_pipe_from_crtc_id(int fd, int crtc_id);
+
+/**
+ * kmstest_set_vt_graphics_mode:
+ *
+ * Sets the controlling VT (if available) into graphics/raw mode and installs
+ * an igt exit handler to set the VT back to text mode on exit. Use
+ * #kmstest_restore_vt_mode to restore the previous VT mode manually.
+ *
+ * All kms tests must call this function to make sure that the fbcon doesn't
+ * interfere by e.g. blanking the screen.
+ */
+void kmstest_set_vt_graphics_mode(void);
+
+/**
+ * kmstest_restore_vt_mode:
+ *
+ * Restore the VT mode in use before #kmstest_set_vt_graphics_mode was called.
+ */
+void kmstest_restore_vt_mode(void);
+
+/**
+ * kmstest_force_connector:
+ * @fd: drm file descriptor
+ * @connector: connector
+ * @state: state to force on @connector
+ *
+ * Force the specified state on the specified connector.
+ *
+ * Returns: true on success
+ */
+bool kmstest_force_connector(int fd, drmModeConnector *connector,
+			     enum kmstest_force_connector_state state);
+
+/**
+ * kmstest_edid_add_3d:
+ * @edid: an existing valid edid block
+ * @length: length of @edid
+ * @new_edid_ptr: pointer to where the new edid will be placed
+ * @new_length: pointer to the size of the new edid
+ *
+ * Makes a copy of an existing edid block and adds an extension indicating
+ * stereo 3D capabilities.
+ */
+void kmstest_edid_add_3d(const unsigned char *edid, size_t length,
+			 unsigned char *new_edid_ptr[], size_t *new_length);
+
+/**
+ * kmstest_force_edid:
+ * @drm_fd: drm file descriptor
+ * @connector: connector to set @edid on
+ * @edid: An EDID data block
+ * @length: length of the EDID data. #EDID_LENGTH defines the standard EDID
+ * length
+ *
+ * Set the EDID data on @connector to @edid. See also #igt_kms_get_base_edid.
+ *
+ * If @length is zero, the forced EDID will be removed.
+ */
+void kmstest_force_edid(int drm_fd, drmModeConnector *connector,
+			const unsigned char *edid, size_t length);
+
+/**
+ * kmstest_get_connector_default_mode:
+ * @drm_fd: DRM fd
+ * @connector: libdrm connector
+ * @mode: libdrm mode
+ *
+ * Retrieves the default mode for @connector and stores it in @mode.
+ *
+ * Returns: true on success, false on failure
+ */
+bool kmstest_get_connector_default_mode(int drm_fd, drmModeConnector *connector,
+					drmModeModeInfo *mode);
+
+/**
+ * kmstest_get_connector_config:
+ * @drm_fd: DRM fd
+ * @connector_id: DRM connector id
+ * @crtc_idx_mask: mask of allowed DRM CRTC indices
+ * @config: structure filled with the possible configuration
+ *
+ * This tries to find a suitable configuration for the given connector and CRTC
+ * constraint and fills it into @config.
+ */
+bool kmstest_get_connector_config(int drm_fd, uint32_t connector_id,
+				  unsigned long crtc_idx_mask,
+				  struct kmstest_connector_config *config);
+
+/**
+ * kmstest_free_connector_config:
+ * @config: connector configuration structure
+ *
+ * Free any resources in @config allocated in kmstest_get_connector_config().
+ */
+void kmstest_free_connector_config(struct kmstest_connector_config *config);
+
+/**
+ * kmstest_set_connector_dpms:
+ * @fd: DRM fd
+ * @connector: libdrm connector
+ * @mode: DRM DPMS value
+ *
+ * This function sets the DPMS setting of @connector to @mode.
+ */
+void kmstest_set_connector_dpms(int fd, drmModeConnector *connector, int mode);
+
+/**
+ * kmstest_get_property:
+ * @drm_fd: drm file descriptor
+ * @object_id: object whose properties we're going to get
+ * @object_type: type of obj_id (DRM_MODE_OBJECT_*)
+ * @name: name of the property we're going to get
+ * @prop_id: if not NULL, returns the property id
+ * @value: if not NULL, returns the property value
+ * @prop: if not NULL, returns the property, and the caller will have to free
+ *        it manually.
+ *
+ * Finds a property with the given name on the given object.
+ *
+ * Returns: true in case we found something.
+ */
+bool kmstest_get_property(int drm_fd, uint32_t object_id, uint32_t object_type,
+			  const char *name, uint32_t *prop_id, uint64_t *value,
+			  drmModePropertyPtr *prop);
+
+/**
+ * kmstest_unset_all_crtcs:
+ * @drm_fd: the DRM fd
+ * @resources: libdrm resources pointer
+ *
+ * Disables all the screens.
+ */
+void kmstest_unset_all_crtcs(int drm_fd, drmModeResPtr resources);
+
+
+/**
+ * igt_display_init:
+ * @display: a pointer to an #igt_display_t structure
+ * @drm_fd: a drm file descriptor
+ *
+ * Initialize @display and allocate the various resources required. Use
+ * #igt_display_fini to release the resources when they are no longer required.
+ *
+ */
 void igt_display_init(igt_display_t *display, int drm_fd);
+
+/**
+ * igt_display_fini:
+ * @display: a pointer to an #igt_display_t structure
+ *
+ * Release any resources associated with @display. This does not free @display
+ * itself.
+ */
 void igt_display_fini(igt_display_t *display);
-int  igt_display_commit2(igt_display_t *display, enum igt_commit_style s);
-int  igt_display_commit(igt_display_t *display);
-int  igt_display_try_commit2(igt_display_t *display, enum igt_commit_style s);
-int  igt_display_get_n_pipes(igt_display_t *display);
+
+/**
+ * igt_display_commit2:
+ * @display: DRM device handle
+ * @s: Commit style
+ *
+ * Commits framebuffer and positioning changes to all planes of each display
+ * pipe, using a specific API to perform the programming.  This function should
+ * be used to exercise a specific driver programming API; igt_display_commit
+ * should be used instead if the API used is unimportant to the test being run.
+ *
+ * This function should only be used to commit changes that are expected to
+ * succeed, since any failure during the commit process will cause the IGT
+ * subtest to fail.  To commit changes that are expected to fail, use
+ * @igt_try_display_commit2 instead.
+ *
+ * Returns: 0 upon success.  This function will never return upon failure
+ * since igt_fail() at lower levels will longjmp out of it.
+ */
+int igt_display_commit2(igt_display_t *display, enum igt_commit_style s);
+
+/**
+ * igt_display_commit:
+ * @display: DRM device handle
+ *
+ * Commits framebuffer and positioning changes to all planes of each display
+ * pipe.
+ *
+ * Returns: 0 upon success.  This function will never return upon failure
+ * since igt_fail() at lower levels will longjmp out of it.
+ */
+int igt_display_commit(igt_display_t *display);
+
+/**
+ * igt_display_try_commit2:
+ * @display: DRM device handle
+ * @s: Commit style
+ *
+ * Attempts to commit framebuffer and positioning changes to all planes of each
+ * display pipe.  This function should be used to commit changes that are
+ * expected to fail, so that the error code can be checked for correctness.
+ * For changes that are expected to succeed, use @igt_display_commit instead.
+ *
+ * Note that in non-atomic commit styles, no display programming will be
+ * performed after the first failure is encountered, so only some of the
+ * operations requested by a test may have been completed.  Tests that catch
+ * errors returned by this function should take care to restore the display to
+ * a sane state after a failure is detected.
+ *
+ * Returns: 0 upon success, otherwise the error code of the first error
+ * encountered.
+ */
+int igt_display_try_commit2(igt_display_t *display, enum igt_commit_style s);
+
+int igt_display_get_n_pipes(igt_display_t *display);
 
 const char *igt_output_name(igt_output_t *output);
 drmModeModeInfo *igt_output_get_mode(igt_output_t *output);
+
+/**
+ * igt_output_override_mode:
+ * @output: Output of which the mode will be overridden
+ * @mode: New mode
+ *
+ * Overrides the output's mode with @mode, so that it is used instead of the
+ * mode obtained with get connectors. Note that the mode is used without
+ * checking if the output supports it, so this might lead to unexpected results.
+ */
 void igt_output_override_mode(igt_output_t *output, drmModeModeInfo *mode);
+
 void igt_output_set_pipe(igt_output_t *output, enum pipe pipe);
+
 igt_plane_t *igt_output_get_plane(igt_output_t *output, enum igt_plane plane);
 
 static inline bool igt_plane_supports_rotation(igt_plane_t *plane)
@@ -256,15 +502,61 @@ static inline bool igt_plane_supports_rotation(igt_plane_t *plane)
 }
 
 void igt_plane_set_fb(igt_plane_t *plane, struct igt_fb *fb);
+
 void igt_plane_set_position(igt_plane_t *plane, int x, int y);
+
+/**
+ * igt_plane_set_size:
+ * @plane: plane pointer for which size to be set
+ * @w: width
+ * @h: height
+ *
+ * This function sets width and height for requested plane.
+ * New size will be committed at plane commit time via
+ * drmModeSetPlane().
+ */
 void igt_plane_set_size(igt_plane_t *plane, int w, int h);
+
 void igt_plane_set_panning(igt_plane_t *plane, int x, int y);
+
 void igt_plane_set_rotation(igt_plane_t *plane, igt_rotation_t rotation);
+
+/**
+ * igt_crtc_set_background:
+ * @pipe: pipe pointer to which background color to be set
+ * @background: background color value in BGR 16bpc
+ *
+ * Sets background color for requested pipe. Color value provided here
+ * will be actually submitted at output commit time via "background_color"
+ * property.
+ * For example to get red as background, set background = 0x00000000FFFF.
+ */
 void igt_crtc_set_background(igt_pipe_t *pipe, uint64_t background);
-void igt_fb_set_position(struct igt_fb *fb, igt_plane_t *plane,
-	uint32_t x, uint32_t y);
-void igt_fb_set_size(struct igt_fb *fb, igt_plane_t *plane,
-	uint32_t w, uint32_t h);
+
+/**
+ * igt_fb_set_position:
+ * @fb: framebuffer pointer
+ * @plane: plane
+ * @x: X position
+ * @y: Y position
+ *
+ * This function sets position for requested framebuffer as src to plane.
+ * New position will be committed at plane commit time via drmModeSetPlane().
+ */
+void igt_fb_set_position(struct igt_fb *fb, igt_plane_t *plane, uint32_t x, uint32_t y);
+
+/**
+ * igt_fb_set_size:
+ * @fb: framebuffer pointer
+ * @plane: plane
+ * @w: width
+ * @h: height
+ *
+ * This function sets fetch rect size from requested framebuffer as src
+ * to plane. New size will be committed at plane commit time via
+ * drmModeSetPlane().
+ */
+void igt_fb_set_size(struct igt_fb *fb, igt_plane_t *plane, uint32_t w, uint32_t h);
 
 void igt_wait_for_vblank(int drm_fd, enum pipe pipe);
 
@@ -281,12 +573,62 @@ void igt_wait_for_vblank(int drm_fd, enum pipe pipe);
 
 #define IGT_FIXED(i,f)	((i) << 16 | (f))
 
+/**
+ * igt_enable_connectors:
+ *
+ * Force connectors to be enabled where this is known to work well. Use
+ * #igt_reset_connectors to revert the changes.
+ *
+ * An exit handler is installed to ensure connectors are reset when the test
+ * exits.
+ */
 void igt_enable_connectors(void);
+
+/**
+ * igt_reset_connectors:
+ *
+ * Remove any forced state from the connectors.
+ */
 void igt_reset_connectors(void);
 
 #define EDID_LENGTH 128
-const unsigned char* igt_kms_get_base_edid(void);
-const unsigned char* igt_kms_get_alt_edid(void);
+
+/**
+ * igt_kms_get_base_edid:
+ *
+ * Get the base edid block, which includes the following modes:
+ *
+ *  - 1920x1080 60Hz
+ *  - 1280x720 60Hz
+ *  - 1024x768 60Hz
+ *  - 800x600 60Hz
+ *  - 640x480 60Hz
+ *
+ * This can be extended with further features using functions such as
+ * #kmstest_edid_add_3d.
+ *
+ * Returns: a basic edid block
+ */
+const unsigned char *igt_kms_get_base_edid(void);
+
+/**
+ * igt_kms_get_alt_edid:
+ *
+ * Get an alternate edid block, which includes the following modes:
+ *
+ *  - 1400x1050 60Hz
+ *  - 1920x1080 60Hz
+ *  - 1280x720 60Hz
+ *  - 1024x768 60Hz
+ *  - 800x600 60Hz
+ *  - 640x480 60Hz
+ *
+ * This can be extended with further features using functions such as
+ * #kmstest_edid_add_3d.
+ *
+ * Returns: an alternate edid block
+ */
+const unsigned char *igt_kms_get_alt_edid(void);
 
 
 #endif /* __IGT_KMS_H__ */
