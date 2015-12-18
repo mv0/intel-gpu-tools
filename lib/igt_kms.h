@@ -62,6 +62,12 @@
 #include "ioctl_wrappers.h"
 
 
+/**
+ * pipe:
+ *
+ * The front end of the display contains the pipes. There are three instances
+ * which are referred to as Pipe A, Pipe B, and Pipe C.
+ */
 enum pipe {
         PIPE_ANY = -1,
         PIPE_A = 0,
@@ -70,7 +76,18 @@ enum pipe {
         I915_MAX_PIPES
 };
 
-/* We namespace this enum to not conflict with the Android i915_drm.h */
+
+/**
+ * igt_plane:
+ *
+ * Prior to GEN9, each display pipe had a primary plane, a overlay/sprite
+ * plane, and a cursor. With the introduction of SKL/BXT the term of universal
+ * plane has been introduced, where each plane can serve different purposes.
+ *
+ * See #igt_display and #igt_display_init that retrieves this information.
+ *
+ * We namespace this enum to not conflict with the Android i915_drm.h.
+ */
 enum igt_plane {
         IGT_PLANE_1 = 0,
         IGT_PLANE_PRIMARY = IGT_PLANE_1,
@@ -88,6 +105,47 @@ enum port {
         I915_MAX_PORTS
 };
 
+/**
+ * kmstest_connector_config:
+ * @crtc: DRM pipe, pointer to #drmModeCrtc
+ * @connector: end-point connector; pointer to #drmModeConnector
+ * @encoder: pointer to #drmModeEncoder
+ * @default_mode: default mode found
+ * @crtc_idx: pipe found when searching for available connectors
+ * @pipe: this translates directly to #pipe
+ *
+ * Structure used to store encoders, connectors and pipes.
+ * See #kmstest_get_connector_config()
+ *
+ * The relationship between frame buffer, pipes and outputs can be illustrated
+ * as follows:
+ *
+ * |[!<-- language="C" -->
+ * +--------------+	+-----+    +-------+    +-----------+
+ * | Frame buffer | ->	|Pipes| -> |Encoder| -> | Connector |
+ * +--------------+	+-----+    +-------+    +-----------+
+ * ]|
+ *
+ * The frame buffer ties a reference to a memory object and provides
+ * a pointer to the actual data (GEM object).
+ *
+ * The pipe (drmModeCrtc) is used to set the display mode, timings and
+ * gamma tables. On some hardware models this is tied with the transcoder.
+ *
+ * Each pipe can have mutiple planes. On older hardware these planes where
+ * known as primary, overlay/sprite, and cursor plane. From GEN9 (SKL/BXT) each
+ * pipe has three planes and a cursor plane. Each plane can be used as a
+ * primary, as a sprite or as an overlay plane, having the term of universal
+ * plane.
+ *
+ * The encoder never sets the mode but is used to convert, depending
+ * on the output, pixels to signals understood by the output.
+ *
+ * The connector will connect to the output display. This contains information
+ * about the attached display such as EDID, DPMS and information about modes
+ * supported by the display.
+ *
+ */
 struct kmstest_connector_config {
 	drmModeCrtc *crtc;
 	drmModeConnector *connector;
@@ -115,19 +173,39 @@ enum kmstest_force_connector_state {
  * A small modeset API
  */
 
-/* High-level kms api with igt_ prefix */
 enum igt_commit_style {
 	COMMIT_LEGACY = 0,
 	COMMIT_UNIVERSAL,
 	/* We'll add atomic here eventually. */
 };
 
+/**
+ * igt_display_t:
+ *
+ * see #igt_display
+ */
 typedef struct igt_display igt_display_t;
-typedef uint32_t igt_fixed_t;			/* 16.16 fixed point */
+
+/**
+ * igt_fixed_t:
+ *
+ * 16.16 fixed point
+ */
+typedef uint32_t igt_fixed_t;
+
+/**
+ * igt_pipe_t:
+ *
+ * see #igt_pipe
+ */
 typedef struct igt_pipe igt_pipe_t;
 
+/**
+ * igt_rotation_t:
+ *
+ * maps to the kernel API
+ */
 typedef enum {
-	/* this maps to the kernel API */
 	IGT_ROTATION_0   = 1 << 0,
 	IGT_ROTATION_90  = 1 << 1,
 	IGT_ROTATION_180 = 1 << 2,
@@ -165,6 +243,21 @@ typedef struct {
 	igt_rotation_t rotation;
 } igt_plane_t;
 
+/**
+ * igt_pipe:
+ * @display: a pointer to #igt_display_t
+ * @pipe: which pipe see #pipe
+ * @enabled: if this pipe is enabled
+ * @n_planes: number of planes for this pipe
+ * @planes: array of #igt_planes_t
+ * @background: Background color MSB BGR 16bpc LSB
+ * @background_changed: if the background has changed
+ * @background_property: background property
+ *
+ * Representation of a pipe, that connects to #igt_panel_t and
+ * #igt_display_t.
+ *
+ */
 struct igt_pipe {
 	igt_display_t *display;
 	enum pipe pipe;
@@ -172,7 +265,7 @@ struct igt_pipe {
 #define IGT_MAX_PLANES	4
 	int n_planes;
 	igt_plane_t planes[IGT_MAX_PLANES];
-	uint64_t background; /* Background color MSB BGR 16bpc LSB */
+	uint64_t background;
 	uint32_t background_changed : 1;
 	uint32_t background_property;
 };
@@ -189,6 +282,17 @@ typedef struct {
 	drmModeModeInfo override_mode;
 } igt_output_t;
 
+/**
+ * igt_display:
+ * @drm_fd: DRM fd
+ * @log_shift: useful for logging; see #LOG_INDENT
+ * @n_pipes: number of pipes
+ * @n_outputs: number of outputs
+ * @pipes_in_use: how many pipes are in use
+ * @outputs: a pointer to #igt_output_t; see #igt_display_init
+ * @pipes: array of #igt_pipe_t
+ * @has_universal_planes: if the hardware supports universal planes
+ */
 struct igt_display {
 	int drm_fd;
 	int log_shift;
@@ -255,7 +359,7 @@ const char *kmstest_connector_type_str(int type);
  * kmstest_dump_mode:
  * @mode: libdrm mode structure
  *
- * Prints @mode to stdout in a huma-readable form.
+ * Prints @mode to stdout in a human-readable form.
  */
 void kmstest_dump_mode(drmModeModeInfo *mode);
 
@@ -403,6 +507,8 @@ bool kmstest_get_property(int drm_fd, uint32_t object_id, uint32_t object_type,
 void kmstest_unset_all_crtcs(int drm_fd, drmModeResPtr resources);
 
 
+/* High-level kms api with igt_ prefix */
+
 /**
  * igt_display_init:
  * @display: a pointer to an #igt_display_t structure
@@ -416,7 +522,7 @@ void igt_display_init(igt_display_t *display, int drm_fd);
 
 /**
  * igt_display_fini:
- * @display: a pointer to an #igt_display_t structure
+ * @display: a pointer to #igt_display_t structure
  *
  * Release any resources associated with @display. This does not free @display
  * itself.
@@ -430,16 +536,16 @@ void igt_display_fini(igt_display_t *display);
  *
  * Commits framebuffer and positioning changes to all planes of each display
  * pipe, using a specific API to perform the programming.  This function should
- * be used to exercise a specific driver programming API; igt_display_commit
+ * be used to exercise a specific driver programming API; #igt_display_commit
  * should be used instead if the API used is unimportant to the test being run.
  *
  * This function should only be used to commit changes that are expected to
  * succeed, since any failure during the commit process will cause the IGT
  * subtest to fail.  To commit changes that are expected to fail, use
- * @igt_try_display_commit2 instead.
+ * #igt_try_display_commit2 instead.
  *
  * Returns: 0 upon success.  This function will never return upon failure
- * since igt_fail() at lower levels will longjmp out of it.
+ * since #igt_fail() at lower levels will longjmp out of it.
  */
 int igt_display_commit2(igt_display_t *display, enum igt_commit_style s);
 
@@ -476,9 +582,31 @@ int igt_display_commit(igt_display_t *display);
  */
 int igt_display_try_commit2(igt_display_t *display, enum igt_commit_style s);
 
+/**
+ * igt_display_get_n_pipes:
+ * @display: the display of which retrieve the number of pipes
+ *
+ * Returns: An integer with total number of pipes for that @display.
+ */
 int igt_display_get_n_pipes(igt_display_t *display);
 
+/**
+ * igt_output_name:
+ * @output: Output of which we retrieve the name
+ *
+ * Returns: A string representing the name of @output.
+ */
 const char *igt_output_name(igt_output_t *output);
+
+/**
+ * igt_output_get_mode:
+ * @output: Output as pointer to #igt_output_t
+ *
+ * Retrieves the default mode of @output
+ *
+ * Returns: a pointer to drmModeModeInfo
+ *
+ */
 drmModeModeInfo *igt_output_get_mode(igt_output_t *output);
 
 /**
@@ -492,8 +620,23 @@ drmModeModeInfo *igt_output_get_mode(igt_output_t *output);
  */
 void igt_output_override_mode(igt_output_t *output, drmModeModeInfo *mode);
 
+
+/**
+ * igt_output_set_plane:
+ * @output: Output of which the pipe will be overriden
+ * @pipe: one of #pipe
+ *
+ */
 void igt_output_set_pipe(igt_output_t *output, enum pipe pipe);
 
+/**
+ * igt_output_get_plane:
+ * @output: a pointer to #igt_output_t
+ * @plane: a #igt_plane plane
+ *
+ * Returns: a pointer to #igt_plane_t matching @plane
+ *
+ */
 igt_plane_t *igt_output_get_plane(igt_output_t *output, enum igt_plane plane);
 
 static inline bool igt_plane_supports_rotation(igt_plane_t *plane)
@@ -501,8 +644,23 @@ static inline bool igt_plane_supports_rotation(igt_plane_t *plane)
 	return plane->rotation_property != 0;
 }
 
+/**
+ * igt_plane_set_fb:
+ * @plane: plane pointer
+ * @fb: pointer to a #igt_fb
+ *
+ * Sets the default plane size and position as framebuffers size.
+ *
+ */
 void igt_plane_set_fb(igt_plane_t *plane, struct igt_fb *fb);
 
+/**
+ * igt_plane_set_position:
+ * @plane: plane pointer for which the position should be set
+ * @x: the x-axis
+ * @y: the y-axis
+ *
+ */
 void igt_plane_set_position(igt_plane_t *plane, int x, int y);
 
 /**
@@ -517,8 +675,21 @@ void igt_plane_set_position(igt_plane_t *plane, int x, int y);
  */
 void igt_plane_set_size(igt_plane_t *plane, int w, int h);
 
+/**
+ * igt_plane_set_panning:
+ * @plane: plane pointer for which pannig should be set
+ * @x: specifies the x-axis
+ * @y: specifies the y-axis
+ *
+ */
 void igt_plane_set_panning(igt_plane_t *plane, int x, int y);
 
+/**
+ * igt_plane_set_rotation:
+ * @plane: plane pointer for which rotation should be set
+ * @rotation: one of #igt_rotation_t
+ *
+ */
 void igt_plane_set_rotation(igt_plane_t *plane, igt_rotation_t rotation);
 
 /**
@@ -558,6 +729,16 @@ void igt_fb_set_position(struct igt_fb *fb, igt_plane_t *plane, uint32_t x, uint
  */
 void igt_fb_set_size(struct igt_fb *fb, igt_plane_t *plane, uint32_t w, uint32_t h);
 
+/**
+ * igt_wait_for_vblank:
+ * @drm_fd: DRM fd
+ * @pipe: the pipe on which to wait for a vertical blank
+ *
+ * This functions can used to wait until the end of the frame and start of the
+ * next frame on @pipe, called a vblank.
+ *
+ *
+ */
 void igt_wait_for_vblank(int drm_fd, enum pipe pipe);
 
 #define for_each_connected_output(display, output)		\
@@ -632,4 +813,3 @@ const unsigned char *igt_kms_get_alt_edid(void);
 
 
 #endif /* __IGT_KMS_H__ */
-
