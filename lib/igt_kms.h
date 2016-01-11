@@ -157,6 +157,7 @@ enum igt_commit_style {
 	COMMIT_LEGACY = 0,
 	COMMIT_UNIVERSAL,
 	/* We'll add atomic here eventually. */
+	COMMIT_ATOMIC
 };
 
 typedef struct igt_display igt_display_t;
@@ -237,6 +238,30 @@ struct igt_display {
 	bool has_universal_planes;
 };
 
+enum igt_atomic_check_relax {
+	IGT_ATOMIC_RELAX_NONE = 0,
+	IGT_CRTC_RELAX_MODE = (1 << 0),
+	IGT_PLANE_RELAX_FB = (1 << 1)
+};
+
+enum igt_atomic_plane_properties {
+	IGT_PLANE_SRC_X = 0,
+	IGT_PLANE_SRC_Y,
+	IGT_PLANE_SRC_W,
+	IGT_PLANE_SRC_H,
+
+	IGT_PLANE_CRTC_X,
+	IGT_PLANE_CRTC_Y,
+	IGT_PLANE_CRTC_W,
+	IGT_PLANE_CRTC_H,
+
+	IGT_PLANE_FB_ID,
+	IGT_PLANE_CRTC_ID,
+	IGT_PLANE_TYPE,
+	IGT_NUM_PLANE_PROPS
+};
+
+
 void igt_display_init(igt_display_t *display, int drm_fd);
 void igt_display_fini(igt_display_t *display);
 int  igt_display_commit2(igt_display_t *display, enum igt_commit_style s);
@@ -288,6 +313,24 @@ void igt_reset_connectors(void);
 const unsigned char* igt_kms_get_base_edid(void);
 const unsigned char* igt_kms_get_alt_edid(void);
 
+
+#define kms_plane_set_prop(req, plane, prop, value) \
+	igt_assert_lt(0, drmModeAtomicAddProperty(req, plane->drm_plane->plane_id, prop, value))
+
+#define kms_do_atomic_commit(fd, req, flags) \
+	do_or_die(drmModeAtomicCommit(fd, req, flags, NULL))
+
+#define kms_do_atomic_commit_err(fd, req, flags, err) { \
+	igt_assert_neq(drmModeAtomicCommit(fd, req, flags, NULL), 0); \
+	igt_assert_eq(errno, err); \
+}
+
+#define kms_plane_commit_atomic_err(plane, plane_old, req, relax, e) { \
+	drmModeAtomicSetCursor(req, 0); \
+	kms_plane_populate_req(plane, req); \
+	kms_do_atomic_commit_err((plane)->state->desc->fd, req, 0, e); \
+	kms_plane_check_current_state(plane_old, relax); \
+}
 
 #endif /* __IGT_KMS_H__ */
 

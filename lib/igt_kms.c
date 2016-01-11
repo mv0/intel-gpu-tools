@@ -930,6 +930,15 @@ igt_plane_set_property(igt_plane_t *plane, uint32_t prop_id, uint64_t value)
 				 DRM_MODE_OBJECT_PLANE, prop_id, value);
 }
 
+static int
+igt_plane_set_atomic_property(drmModeAtomicReq *req, igt_plane_t *plane,
+			      uint32_t prop_id, uint64_t val)
+{
+	int r;
+	r = drmModeAtomicAddProperty(req, plane->drm_plane->plane_id, prop_id, val);
+	igt_assert_lt(0, r);
+}
+
 static bool
 get_crtc_property(int drm_fd, uint32_t crtc_id, const char *name,
 		   uint32_t *prop_id /* out */, uint64_t *value /* out */,
@@ -1406,6 +1415,131 @@ static int igt_drm_plane_commit(igt_plane_t *plane,
 	return 0;
 }
 
+static int igt_atomic_plane_commit(igt_plane_t *plane,
+				   igt_output_t *output,
+				   bool fail_on_error)
+{
+	igt_display_t *display = output->display;
+
+	uint32_t fb_id, crtc_id;
+	int ret;
+	uint32_t src_x;
+	uint32_t src_y;
+	uint32_t src_w;
+	uint32_t src_h;
+	int32_t crtc_x;
+	int32_t crtc_y;
+	uint32_t crtc_w;
+	uint32_t crtc_h;
+
+	drmModeAtomicReq *req = drmModeAtomicAlloc();
+	igt_assert(plane->drm_plane);
+
+	igt_debug("Running with atomic_plane_commit\n");
+
+	/* it's an error to try an unsupported feature */
+	igt_assert(igt_plane_supports_rotation(plane) ||
+		   !plane->rotation_changed);
+
+	fb_id = igt_plane_get_fb_id(plane);
+	crtc_id = output->config.crtc->crtc_id;
+
+	if ((plane->fb_changed || plane->size_changed) && fb_id == 0) {
+
+		igt_debug("FB_CHANGED, SIZE_CHANGED and fb_id = 0\n");
+
+		LOG(display,
+		    "%s: SetPlane pipe %s, plane %d, disabling\n",
+		    igt_output_name(output),
+		    kmstest_pipe_name(output->config.pipe),
+		    plane->index);
+
+		drmModeAtomicSetCursor(req, 0);
+
+		/* populate plane req */
+		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_ID, crtc_id);
+		kms_plane_set_prop(req, plane, IGT_PLANE_FB_ID, fb_id);
+
+		kms_plane_set_prop(req, plane, IGT_PLANE_SRC_X, 0);
+		kms_plane_set_prop(req, plane, IGT_PLANE_SRC_Y, 0);
+		kms_plane_set_prop(req, plane, IGT_PLANE_SRC_W, 0);
+		kms_plane_set_prop(req, plane, IGT_PLANE_SRC_H, 0);
+
+		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_X, IGT_FIXED(0, 0));
+		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_Y, IGT_FIXED(0, 0));
+		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_W, IGT_FIXED(0, 0));
+		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_H, IGT_FIXED(0, 0));
+
+		if (fail_on_error) {
+			kms_do_atomic_commit_err(display->drm_fd, req, 0, EINVAL);
+		} else {
+			kms_do_atomic_commit(display->drm_fd, req, 0);
+		}
+
+	} else if (plane->fb_changed || plane->position_changed ||
+		plane->size_changed) {
+
+		igt_debug("FB_CHANGED, POS_CHANGED, SIZE_CHANGED\n");
+		src_x = IGT_FIXED(plane->fb->src_x,0); /* src_x */
+		src_y = IGT_FIXED(plane->fb->src_y,0); /* src_y */
+		src_w = IGT_FIXED(plane->fb->src_w,0); /* src_w */
+		src_h = IGT_FIXED(plane->fb->src_h,0); /* src_h */
+		crtc_x = plane->crtc_x;
+		crtc_y = plane->crtc_y;
+		crtc_w = plane->crtc_w;
+		crtc_h = plane->crtc_h;
+
+		LOG(display,
+		    "%s: SetPlane %s.%d, fb %u, src = (%d, %d) "
+			"%ux%u dst = (%u, %u) %ux%u\n",
+		    igt_output_name(output),
+		    kmstest_pipe_name(output->config.pipe),
+		    plane->index,
+		    fb_id,
+		    src_x >> 16, src_y >> 16, src_w >> 16, src_h >> 16,
+		    crtc_x, crtc_y, crtc_w, crtc_h);
+
+		drmModeAtomicSetCursor(req, 0);
+
+		/* populate plane req */
+		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_ID, crtc_id);
+		kms_plane_set_prop(req, plane, IGT_PLANE_FB_ID, fb_id);
+
+		kms_plane_set_prop(req, plane, IGT_PLANE_SRC_X, crtc_x);
+		kms_plane_set_prop(req, plane, IGT_PLANE_SRC_Y, crtc_y);
+		kms_plane_set_prop(req, plane, IGT_PLANE_SRC_W, crtc_w);
+		kms_plane_set_prop(req, plane, IGT_PLANE_SRC_H, crtc_h);
+
+		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_X, src_x);
+		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_Y, src_y);
+		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_W, src_w);
+		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_H, src_h);
+
+		if (fail_on_error) {
+			kms_do_atomic_commit_err(display->drm_fd, req, 0, EINVAL);
+		} else {
+			kms_do_atomic_commit(display->drm_fd, req, 0);
+		}
+	}
+
+	plane->fb_changed = false;
+	plane->position_changed = false;
+	plane->size_changed = false;
+
+	drmModeAtomicFree(req);
+
+	if (plane->rotation_changed) {
+		ret = igt_plane_set_property(plane, plane->rotation_property,
+				       plane->rotation);
+
+		plane->rotation_changed = false;
+		CHECK_RETURN(ret, fail_on_error);
+	}
+
+	return 0;
+}
+
+
 /*
  * Commit position and fb changes to a cursor via legacy ioctl's.  If commit
  * fails, we'll either fail immediately (for tests that expect the commit to
@@ -1558,7 +1692,10 @@ static int igt_plane_commit(igt_plane_t *plane,
 		return igt_primary_plane_commit_legacy(plane, output,
 						       fail_on_error);
 	} else {
-		return igt_drm_plane_commit(plane, output, fail_on_error);
+		if (s == COMMIT_UNIVERSAL)
+			return igt_drm_plane_commit(plane, output, fail_on_error);
+		else
+			return igt_atomic_plane_commit(plane, output, fail_on_error);
 	}
 }
 
