@@ -88,6 +88,7 @@ TESTS_progs_M = \
 	kms_rotation_crc \
 	kms_setmode \
 	kms_universal_plane \
+	kms_universal_plane_atomic \
 	kms_vblank \
 	kms_crtc_background_color \
 	kms_plane_scaling \
