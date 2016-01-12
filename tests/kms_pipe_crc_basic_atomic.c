@@ -128,6 +128,8 @@ test_read_crc_for_output(data_t *data, int pipe, igt_output_t *output,
 		int n_crcs;
 
 		igt_output_set_pipe(output, pipe);
+
+		igt_debug("Commit 1\n");
 		igt_display_commit2(display, COMMIT_ATOMIC);
 
 		if (!output->valid) {
@@ -151,13 +153,17 @@ test_read_crc_for_output(data_t *data, int pipe, igt_output_t *output,
 		primary = igt_output_get_plane(output, 0);
 		igt_plane_set_fb(primary, &data->fb);
 
+		igt_debug("Commit 2\n");
 		igt_display_commit2(display, COMMIT_ATOMIC);
+
+		igt_debug("Reading pipe\n");
 
 		if (flags & TEST_NONBLOCK)
 			pipe_crc = igt_pipe_crc_new_nonblock(pipe, INTEL_PIPE_CRC_SOURCE_AUTO);
 		else
 			pipe_crc = igt_pipe_crc_new(pipe, INTEL_PIPE_CRC_SOURCE_AUTO);
 
+		igt_debug("CRC_START...\n");
 		igt_pipe_crc_start(pipe_crc);
 
 		/* wait for N_CRCS vblanks and the corresponding N_CRCS CRCs */

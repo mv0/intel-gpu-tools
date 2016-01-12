@@ -152,6 +152,29 @@ void kmstest_unset_all_crtcs(int drm_fd, drmModeResPtr resources);
  * A small modeset API
  */
 
+enum igt_atomic_check_relax {
+	IGT_ATOMIC_RELAX_NONE = 0,
+	IGT_CRTC_RELAX_MODE = (1 << 0),
+	IGT_PLANE_RELAX_FB = (1 << 1)
+};
+
+enum igt_atomic_plane_properties {
+	IGT_PLANE_SRC_X = 0,
+	IGT_PLANE_SRC_Y,
+	IGT_PLANE_SRC_W,
+	IGT_PLANE_SRC_H,
+
+	IGT_PLANE_CRTC_X,
+	IGT_PLANE_CRTC_Y,
+	IGT_PLANE_CRTC_W,
+	IGT_PLANE_CRTC_H,
+
+	IGT_PLANE_FB_ID,
+	IGT_PLANE_CRTC_ID,
+	IGT_PLANE_TYPE,
+	IGT_NUM_PLANE_PROPS
+};
+
 /* High-level kms api with igt_ prefix */
 enum igt_commit_style {
 	COMMIT_LEGACY = 0,
@@ -201,6 +224,7 @@ typedef struct {
 	/* panning offset within the fb */
 	unsigned int pan_x, pan_y;
 	igt_rotation_t rotation;
+	uint32_t props_plane[IGT_NUM_PLANE_PROPS];
 } igt_plane_t;
 
 struct igt_pipe {
@@ -236,29 +260,6 @@ struct igt_display {
 	igt_output_t *outputs;
 	igt_pipe_t pipes[I915_MAX_PIPES];
 	bool has_universal_planes;
-};
-
-enum igt_atomic_check_relax {
-	IGT_ATOMIC_RELAX_NONE = 0,
-	IGT_CRTC_RELAX_MODE = (1 << 0),
-	IGT_PLANE_RELAX_FB = (1 << 1)
-};
-
-enum igt_atomic_plane_properties {
-	IGT_PLANE_SRC_X = 0,
-	IGT_PLANE_SRC_Y,
-	IGT_PLANE_SRC_W,
-	IGT_PLANE_SRC_H,
-
-	IGT_PLANE_CRTC_X,
-	IGT_PLANE_CRTC_Y,
-	IGT_PLANE_CRTC_W,
-	IGT_PLANE_CRTC_H,
-
-	IGT_PLANE_FB_ID,
-	IGT_PLANE_CRTC_ID,
-	IGT_PLANE_TYPE,
-	IGT_NUM_PLANE_PROPS
 };
 
 
@@ -315,7 +316,10 @@ const unsigned char* igt_kms_get_alt_edid(void);
 
 
 #define kms_plane_set_prop(req, plane, prop, value) \
-	igt_assert_lt(0, drmModeAtomicAddProperty(req, plane->drm_plane->plane_id, prop, value))
+	igt_debug("Adding prop to %p, plane_id=%d, plane_prop=%d, val=%d\n",	\
+			req, plane->drm_plane->plane_id, plane->props_plane[prop], value);	\
+	igt_assert_lt(0, drmModeAtomicAddProperty(req, plane->drm_plane->plane_id, \
+				plane->props_plane[prop], value))
 
 #define kms_do_atomic_commit(fd, req, flags) \
 	do_or_die(drmModeAtomicCommit(fd, req, flags, NULL))
@@ -331,6 +335,9 @@ const unsigned char* igt_kms_get_alt_edid(void);
 	kms_do_atomic_commit_err((plane)->state->desc->fd, req, 0, e); \
 	kms_plane_check_current_state(plane_old, relax); \
 }
+
+void igt_atomic_fill_obj_props(int fd, uint32_t id, int type, int num_props,
+				const char **prop_names, uint32_t *prop_ids);
 
 #endif /* __IGT_KMS_H__ */
 

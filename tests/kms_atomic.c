@@ -222,6 +222,8 @@ static uint32_t blob_duplicate(int fd, uint32_t id_orig)
 						  value));
 
 #define plane_set_prop(req, plane, prop, value) \
+	igt_debug("Adding prop to %p, plane_id=%d, plane_prop=%d, val=%d\n",	\
+			req, plane->obj, plane->state->desc->props_plane[prop], value);	\
 	igt_assert_lt(0, drmModeAtomicAddProperty(req, plane->obj, \
 						  plane->state->desc->props_plane[prop], \
 						  value));
