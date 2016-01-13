@@ -383,10 +383,12 @@ sanity_test_pipe(data_t *data, enum pipe pipe, igt_output_t *output)
 	 */
 	igt_plane_set_fb(primary, &test.undersized_fb);
 	expect = (data->gen < 9) ? -EINVAL : 0;
+	igt_debug("First commit\n");
 	igt_assert(igt_display_try_commit2(&data->display, COMMIT_UNIVERSAL) == expect);
 
 	/* Same as above, but different plane positioning. */
 	igt_plane_set_position(primary, 100, 100);
+	igt_debug("Second commit\n");
 	igt_assert(igt_display_try_commit2(&data->display, COMMIT_UNIVERSAL) == expect);
 
 	igt_plane_set_position(primary, 0, 0);

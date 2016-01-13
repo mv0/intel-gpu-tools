@@ -1447,17 +1447,6 @@ static int igt_atomic_plane_commit(igt_plane_t *plane,
 	igt_assert(plane->drm_plane);
 
 	do_or_die(drmSetClientCap(display->drm_fd, DRM_CLIENT_CAP_ATOMIC, 1));
-
-	igt_atomic_fill_obj_props(display->drm_fd, plane->drm_plane->plane_id,
-				  DRM_MODE_OBJECT_PLANE, IGT_NUM_PLANE_PROPS,
-				  igt_plane_prop_names, plane->props_plane);
-
-	for (j = 0; j < IGT_NUM_PLANE_PROPS; j++) {
-		igt_debug("PLANE_NAME=%s, PLANE_ID=%d\n",
-				igt_plane_prop_names[j],
-				plane->props_plane[j]);
-	}
-	req = drmModeAtomicAlloc();
 	igt_debug("Running with atomic_plane_commit\n");
 
 	/* it's an error to try an unsupported feature */
@@ -1470,6 +1459,17 @@ static int igt_atomic_plane_commit(igt_plane_t *plane,
 	if ((plane->fb_changed || plane->size_changed) && fb_id == 0) {
 
 		igt_debug("FB_CHANGED, SIZE_CHANGED and fb_id = 0\n");
+		req = drmModeAtomicAlloc();
+
+		igt_atomic_fill_obj_props(display->drm_fd, plane->drm_plane->plane_id,
+					  DRM_MODE_OBJECT_PLANE, IGT_NUM_PLANE_PROPS,
+					  igt_plane_prop_names, plane->props_plane);
+
+		for (j = 0; j < IGT_NUM_PLANE_PROPS; j++) {
+			igt_debug("PLANE_NAME=%s, PLANE_ID=%d\n",
+					igt_plane_prop_names[j],
+					plane->props_plane[j]);
+		}
 
 		LOG(display,
 		    "%s: drmModeAtomicCommit pipe %s, plane %d, disabling\n",
@@ -1492,11 +1492,25 @@ static int igt_atomic_plane_commit(igt_plane_t *plane,
 		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_W, 0);
 		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_H, 0);
 
-		kms_do_atomic_commit(display->drm_fd, req, 0);
+		ret = kms_do_atomic_commit(display->drm_fd, req, 0);
+		CHECK_RETURN(ret, fail_on_error);
 		igt_debug("Commit successful at fb_id = 0\n");
+		drmModeAtomicFree(req);
 
 	} else if (plane->fb_changed || plane->position_changed ||
 		plane->size_changed) {
+
+		req = drmModeAtomicAlloc();
+
+		igt_atomic_fill_obj_props(display->drm_fd, plane->drm_plane->plane_id,
+					  DRM_MODE_OBJECT_PLANE, IGT_NUM_PLANE_PROPS,
+					  igt_plane_prop_names, plane->props_plane);
+
+		for (j = 0; j < IGT_NUM_PLANE_PROPS; j++) {
+			igt_debug("PLANE_NAME=%s, PLANE_ID=%d\n",
+					igt_plane_prop_names[j],
+					plane->props_plane[j]);
+		}
 
 		igt_debug("FB_CHANGED, POS_CHANGED, SIZE_CHANGED\n");
 
@@ -1539,15 +1553,17 @@ static int igt_atomic_plane_commit(igt_plane_t *plane,
 		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_W, crtc_w);
 		kms_plane_set_prop(req, plane, IGT_PLANE_CRTC_H, crtc_h);
 
-		kms_do_atomic_commit(display->drm_fd, req, 0);
+		ret = kms_do_atomic_commit(display->drm_fd, req, 0);
+		CHECK_RETURN(ret, fail_on_error);
 		igt_debug("Commit successful at fb_id=%d\n", fb_id);
+
+		drmModeAtomicFree(req);
 	}
 
 	plane->fb_changed = false;
 	plane->position_changed = false;
 	plane->size_changed = false;
 
-	drmModeAtomicFree(req);
 
 	if (plane->rotation_changed) {
 		ret = igt_plane_set_property(plane, plane->rotation_property,
@@ -1755,6 +1771,7 @@ static int igt_output_commit(igt_output_t *output,
 		if (plane->fb_changed || plane->position_changed || plane->size_changed)
 			need_wait_for_vblank = true;
 
+		igt_debug("Commit plane %d\n", i);
 		ret = igt_plane_commit(plane, output, s, fail_on_error);
 		CHECK_RETURN(ret, fail_on_error);
 	}
@@ -1794,7 +1811,7 @@ static int do_display_commit(igt_display_t *display,
 
 		if (!output->valid)
 			continue;
-
+		igt_debug("Commit display %d\n", i);
 		ret = igt_output_commit(output, s, fail_on_error);
 		CHECK_RETURN(ret, fail_on_error);
 	}

@@ -322,7 +322,7 @@ const unsigned char* igt_kms_get_alt_edid(void);
 				plane->props_plane[prop], value))
 
 #define kms_do_atomic_commit(fd, req, flags) \
-	do_or_die(drmModeAtomicCommit(fd, req, flags, NULL))
+	drmModeAtomicCommit(fd, req, flags, NULL)
 
 #define kms_do_atomic_commit_err(fd, req, flags, err) { \
 	igt_assert_neq(drmModeAtomicCommit(fd, req, flags, NULL), 0); \
