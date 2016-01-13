@@ -383,12 +383,10 @@ sanity_test_pipe(data_t *data, enum pipe pipe, igt_output_t *output)
 	 */
 	igt_plane_set_fb(primary, &test.undersized_fb);
 	expect = (data->gen < 9) ? -EINVAL : 0;
-	igt_debug("First commit\n");
 	igt_assert(igt_display_try_commit2(&data->display, COMMIT_UNIVERSAL) == expect);
 
 	/* Same as above, but different plane positioning. */
 	igt_plane_set_position(primary, 100, 100);
-	igt_debug("Second commit\n");
 	igt_assert(igt_display_try_commit2(&data->display, COMMIT_UNIVERSAL) == expect);
 
 	igt_plane_set_position(primary, 0, 0);
@@ -583,6 +581,7 @@ cursor_leak_test_pipe(data_t *data, enum pipe pipe, igt_output_t *output)
 
 	/* Count GEM framebuffers before creating our cursor FB's */
 	count1 = i915_gem_fb_count();
+	igt_wait(i915_gem_fb_count() == 1, 10000, 10);
 
 	/* Black background FB */
 	igt_create_color_fb(data->drm_fd, mode->hdisplay, mode->vdisplay,
@@ -747,28 +746,40 @@ run_tests_for_pipe(data_t *data, enum pipe pipe)
 
 	igt_subtest_f("universal-plane-pipe-%s-functional",
 		      kmstest_pipe_name(pipe))
-		for_each_connected_output(&data->display, output)
+		for_each_connected_output(&data->display, output) {
+			igt_debug("Before functional %d\n", i915_gem_fb_count());
 			functional_test_pipe(data, pipe, output);
-
+			igt_debug("After functional %d\n", i915_gem_fb_count());
+		}
 	igt_subtest_f("universal-plane-pipe-%s-sanity",
 		      kmstest_pipe_name(pipe))
-		for_each_connected_output(&data->display, output)
+		for_each_connected_output(&data->display, output) {
+			igt_debug("Before sanity %d\n", i915_gem_fb_count());
 			sanity_test_pipe(data, pipe, output);
+			igt_debug("After sanity %d\n", i915_gem_fb_count());
+		}
 
 	igt_subtest_f("disable-primary-vs-flip-pipe-%s",
 		      kmstest_pipe_name(pipe))
-		for_each_connected_output(&data->display, output)
+		for_each_connected_output(&data->display, output) {
+			igt_debug("Before primary-vs-flip %d\n", i915_gem_fb_count());
 			pageflip_test_pipe(data, pipe, output);
+			igt_debug("After primary-vs-flip %d\n", i915_gem_fb_count());
+		}
 
 	igt_subtest_f("cursor-fb-leak-pipe-%s",
 		      kmstest_pipe_name(pipe))
-		for_each_connected_output(&data->display, output)
+		for_each_connected_output(&data->display, output) {
+			igt_debug("Before cursor %d\n", i915_gem_fb_count());
 			cursor_leak_test_pipe(data, pipe, output);
-
+			igt_debug("After cursor %d\n", i915_gem_fb_count());
+		}
+#if 0
 	igt_subtest_f("universal-plane-gen9-features-pipe-%s",
 		      kmstest_pipe_name(pipe))
 		for_each_connected_output(&data->display, output)
 			gen9_test_pipe(data, pipe, output);
+#endif
 }
 
 static data_t data;
