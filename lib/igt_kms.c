@@ -1384,7 +1384,7 @@ igt_atomic_fill_pipe_props(igt_output_t *output, igt_pipe_t *pipe, int type,
 
 		if (pipe->atomic_props_crtc[IGT_CRTC_MODE_ID] == props->props[i]) {
 			pipe->id = props->prop_values[i];
-		} else if (pipe->atomic_props_crtc[IGT_CRTC_MODE_ID] == props->props[i]) {
+		} else if (pipe->atomic_props_crtc[IGT_CRTC_ACTIVE] == props->props[i]) {
 			pipe->enabled = props->prop_values[i];
 		}
 
@@ -1419,7 +1419,6 @@ igt_atomic_plane_fill(igt_plane_t *plane, igt_output_t *output,
 
 	igt_assert(plane->drm_plane);
 
-	do_or_die(drmSetClientCap(display->drm_fd, DRM_CLIENT_CAP_ATOMIC, 1));
 
 	/* it's an error to try an unsupported feature */
 	igt_assert(igt_plane_supports_rotation(plane) ||
@@ -1798,6 +1797,9 @@ static int igt_output_commit(igt_output_t *output,
 
 	if (s == COMMIT_ATOMIC) {
 
+		do_or_die(drmSetClientCap(display->drm_fd,
+					  DRM_CLIENT_CAP_ATOMIC, 1));
+
 		req = drmModeAtomicAlloc();
 
 		igt_atomic_fill_pipe_props(output, pipe, DRM_MODE_OBJECT_CRTC,
@@ -1806,9 +1808,10 @@ static int igt_output_commit(igt_output_t *output,
 		drmModeAtomicSetCursor(req, 0);
 
 		/* fill objs for CRTC */
-		igt_atomic_populate_pipe_req(req, output, pipe, IGT_CRTC_MODE_ID, pipe->id);
-		igt_atomic_populate_pipe_req(req, output, pipe, IGT_CRTC_ACTIVE, pipe->enabled);
-
+		igt_atomic_populate_pipe_req(req, output, pipe,
+					     IGT_CRTC_MODE_ID, pipe->id);
+		igt_atomic_populate_pipe_req(req, output, pipe,
+					     IGT_CRTC_ACTIVE, pipe->enabled);
 	}
 
 	if (pipe->background_changed) {
@@ -1831,7 +1834,6 @@ static int igt_output_commit(igt_output_t *output,
 	if (s == COMMIT_ATOMIC) {
 		ret = drmModeAtomicCommit(display->drm_fd, req, 0, NULL);
 		CHECK_RETURN(ret, fail_on_error);
-
 		drmModeAtomicFree(req);
 	}
 
