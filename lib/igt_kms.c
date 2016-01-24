@@ -1320,7 +1320,7 @@ static const char *igt_plane_prop_names[IGT_NUM_PLANE_PROPS] = {
 	"type"
 };
 
-static const char *igt_crtc_props_names[IGT_NUM_CRTC_PROPS] = {
+static const char *igt_pipe_props_names[IGT_NUM_PIPE_PROPS] = {
 	"MODE_ID",
 	"ACTIVE"
 };
@@ -1358,6 +1358,10 @@ igt_atomic_fill_plane_props(igt_display_t *display, igt_plane_t *plane,
 	drmModeFreeObjectProperties(props);
 }
 
+/*
+ * Retrieve all the properties specified in props_name and store them into
+ * pipe->atomic_props_pipe.
+ */
 static void
 igt_atomic_fill_pipe_props(igt_output_t *output, igt_pipe_t *pipe, int type,
 			   int num_props, const char **prop_names)
@@ -1378,13 +1382,15 @@ igt_atomic_fill_pipe_props(igt_output_t *output, igt_pipe_t *pipe, int type,
 			if (strcmp(prop->name, prop_names[j]) != 0)
 				continue;
 
-			pipe->atomic_props_crtc[j] = props->props[i];
+			pipe->atomic_props_pipe[j] = props->props[i];
 			break;
 		}
 
-		if (pipe->atomic_props_crtc[IGT_CRTC_MODE_ID] == props->props[i]) {
+		if (pipe->atomic_props_pipe[IGT_PIPE_MODE_ID] == props->props[i]) {
 			pipe->id = props->prop_values[i];
-		} else if (pipe->atomic_props_crtc[IGT_CRTC_ACTIVE] == props->props[i]) {
+			if (!pipe->id)
+				continue;
+		} else if (pipe->atomic_props_pipe[IGT_PIPE_ACTIVE] == props->props[i]) {
 			pipe->enabled = props->prop_values[i];
 		}
 
@@ -1430,7 +1436,7 @@ igt_atomic_plane_fill(igt_plane_t *plane, igt_output_t *output,
 	if ((plane->fb_changed || plane->size_changed) && fb_id == 0) {
 
 		LOG(display,
-		    "%s: drmModeAtomicCommit pipe %s, plane %d, disabling\n",
+		    "%s: Atomic fill pipe %s, plane %d, disabling\n",
 		     igt_output_name(output),
 		     kmstest_pipe_name(output->config.pipe),
 		     plane->index);
@@ -1465,7 +1471,7 @@ igt_atomic_plane_fill(igt_plane_t *plane, igt_output_t *output,
 		crtc_h = plane->crtc_h;
 
 		LOG(display,
-		    "%s: drmModeAtomicCommit %s.%d, fb %u, src = (%d, %d) "
+		    "%s: Atomic fill %s.%d, fb %u, src = (%d, %d) "
 		    "%ux%u dst = (%u, %u) %ux%u\n",
 		    igt_output_name(output),
 		    kmstest_pipe_name(output->config.pipe),
@@ -1796,22 +1802,20 @@ static int igt_output_commit(igt_output_t *output,
 	pipe = igt_output_get_driving_pipe(output);
 
 	if (s == COMMIT_ATOMIC) {
-
 		do_or_die(drmSetClientCap(display->drm_fd,
 					  DRM_CLIENT_CAP_ATOMIC, 1));
 
 		req = drmModeAtomicAlloc();
-
-		igt_atomic_fill_pipe_props(output, pipe, DRM_MODE_OBJECT_CRTC,
-					   IGT_NUM_CRTC_PROPS, igt_crtc_props_names);
-
 		drmModeAtomicSetCursor(req, 0);
 
-		/* fill objs for CRTC */
+		igt_atomic_fill_pipe_props(output, pipe, DRM_MODE_OBJECT_CRTC,
+					   IGT_NUM_PIPE_PROPS, igt_pipe_props_names);
+
+		/* populate CRTC req */
 		igt_atomic_populate_pipe_req(req, output, pipe,
-					     IGT_CRTC_MODE_ID, pipe->id);
+					     IGT_PIPE_MODE_ID, pipe->id);
 		igt_atomic_populate_pipe_req(req, output, pipe,
-					     IGT_CRTC_ACTIVE, pipe->enabled);
+					     IGT_PIPE_ACTIVE, pipe->enabled);
 	}
 
 	if (pipe->background_changed) {
@@ -1834,6 +1838,7 @@ static int igt_output_commit(igt_output_t *output,
 	if (s == COMMIT_ATOMIC) {
 		ret = drmModeAtomicCommit(display->drm_fd, req, 0, NULL);
 		CHECK_RETURN(ret, fail_on_error);
+		LOG(display, "drmModeAtomicCommit()\n");
 		drmModeAtomicFree(req);
 	}
 

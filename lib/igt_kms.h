@@ -176,10 +176,10 @@ enum igt_atomic_plane_properties {
        IGT_NUM_PLANE_PROPS
 };
 
-enum igt_atomic_crtc_properties {
-	IGT_CRTC_MODE_ID = 0,
-	IGT_CRTC_ACTIVE,
-	IGT_NUM_CRTC_PROPS
+enum igt_atomic_pipe_properties {
+	IGT_PIPE_MODE_ID = 0,
+	IGT_PIPE_ACTIVE,
+	IGT_NUM_PIPE_PROPS
 };
 
 typedef struct igt_display igt_display_t;
@@ -236,8 +236,7 @@ struct igt_pipe {
 	uint64_t background; /* Background color MSB BGR 16bpc LSB */
 	uint32_t background_changed : 1;
 	uint32_t background_property;
-
-	uint32_t atomic_props_crtc[IGT_NUM_CRTC_PROPS];
+	uint32_t atomic_props_pipe[IGT_NUM_PIPE_PROPS];
 	uint32_t id;
 };
 
@@ -319,10 +318,17 @@ void igt_wait_for_vblank(int drm_fd, enum pipe pipe);
 	igt_assert_lt(0, drmModeAtomicAddProperty(req, plane->drm_plane->plane_id,\
 						  plane->atomic_props_plane[prop], value))
 
-
+/**
+ * igt_atomic_populate_pipe_req:
+ * @req: A pointer to drmModeAtomicReq
+ * @plane: A pointer igt_output_t
+ * @pipe: A pointer to igt_pipe_t
+ * @prop: one of igt_atomic_pipe_properties
+ * @value: the value to add
+ */
 #define igt_atomic_populate_pipe_req(req, output, pipe, prop, value) \
 	igt_assert_lt(0, drmModeAtomicAddProperty(req, output->config.crtc->crtc_id,\
-						  pipe->atomic_props_crtc[prop], value))
+						  pipe->atomic_props_pipe[prop], value))
 
 void igt_enable_connectors(void);
 void igt_reset_connectors(void);
