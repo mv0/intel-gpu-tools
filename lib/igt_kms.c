@@ -1306,6 +1306,218 @@ static uint32_t igt_plane_get_fb_gem_handle(igt_plane_t *plane)
 	igt_assert(r == 0);	\
 }
 
+static const char *igt_plane_prop_names[IGT_NUM_PLANE_PROPS] = {
+	"SRC_X",
+	"SRC_Y",
+	"SRC_W",
+	"SRC_H",
+	"CRTC_X",
+	"CRTC_Y",
+	"CRTC_W",
+	"CRTC_H",
+	"FB_ID",
+	"CRTC_ID",
+	"type"
+};
+
+static const char *igt_pipe_props_names[IGT_NUM_PIPE_PROPS] = {
+	"MODE_ID",
+	"ACTIVE"
+};
+
+/*
+ * Retrieve all the properies specified in props_name and store them into
+ * plane->atomic_props_plane.
+ */
+static void
+igt_atomic_fill_plane_props(igt_display_t *display, igt_plane_t *plane,
+			    int type, int num_props, const char **prop_names)
+{
+	drmModeObjectPropertiesPtr props;
+	int i, j, fd;
+
+	fd = display->drm_fd;
+
+	props = drmModeObjectGetProperties(fd, plane->drm_plane->plane_id, type);
+	igt_assert(props);
+
+	for (i = 0; i < props->count_props; i++) {
+		drmModePropertyPtr prop =
+			drmModeGetProperty(fd, props->props[i]);
+
+		for (j = 0; j < num_props; j++) {
+			if (strcmp(prop->name, prop_names[j]) != 0)
+				continue;
+			plane->atomic_props_plane[j] = props->props[i];
+			break;
+		}
+
+		drmModeFreeProperty(prop);
+	}
+
+	drmModeFreeObjectProperties(props);
+}
+
+/*
+ * Retrieve all the properties specified in props_name and store them into
+ * pipe->atomic_props_pipe.
+ */
+static void
+igt_atomic_fill_pipe_props(igt_output_t *output, igt_pipe_t *pipe, int type,
+			   int num_props, const char **prop_names)
+{
+	drmModeObjectPropertiesPtr props;
+	int i, j, fd;
+
+	fd = output->display->drm_fd;
+
+	props = drmModeObjectGetProperties(fd, output->config.crtc->crtc_id, type);
+	igt_assert(props);
+
+	for (i = 0; i < props->count_props; i++) {
+		drmModePropertyPtr prop =
+			drmModeGetProperty(fd, props->props[i]);
+
+		for (j = 0; j < num_props; j++) {
+			if (strcmp(prop->name, prop_names[j]) != 0)
+				continue;
+
+			pipe->atomic_props_pipe[j] = props->props[i];
+			break;
+		}
+
+		if (pipe->atomic_props_pipe[IGT_PIPE_MODE_ID] == props->props[i]) {
+			pipe->id = props->prop_values[i];
+			if (!pipe->id)
+				continue;
+		} else if (pipe->atomic_props_pipe[IGT_PIPE_ACTIVE] == props->props[i]) {
+			pipe->enabled = props->prop_values[i];
+		}
+
+		drmModeFreeProperty(prop);
+	}
+
+	drmModeFreeObjectProperties(props);
+}
+
+/*
+ * Commit position and fb changes to a DRM plane via the AtomicCommit()
+ * ioctl; if the DRM call to program the plane fails, we'll either fail
+ * immediately (for tests that expect the commit to succeed) or return the
+ * failure code (for tests that expect a specific error code).
+ */
+static int
+igt_atomic_plane_fill(igt_plane_t *plane, igt_output_t *output,
+		      drmModeAtomicReq *req, bool fail_on_error)
+{
+	igt_display_t *display = output->display;
+
+	uint32_t fb_id, crtc_id;
+	int ret;
+	uint32_t src_x;
+	uint32_t src_y;
+	uint32_t src_w;
+	uint32_t src_h;
+	int32_t crtc_x;
+	int32_t crtc_y;
+	uint32_t crtc_w;
+	uint32_t crtc_h;
+
+	igt_assert(plane->drm_plane);
+
+
+	/* it's an error to try an unsupported feature */
+	igt_assert(igt_plane_supports_rotation(plane) ||
+			!plane->rotation_changed);
+
+	fb_id = igt_plane_get_fb_id(plane);
+	crtc_id = output->config.crtc->crtc_id;
+
+	if ((plane->fb_changed || plane->size_changed) && fb_id == 0) {
+
+		LOG(display,
+		    "%s: Atomic fill pipe %s, plane %d, disabling\n",
+		     igt_output_name(output),
+		     kmstest_pipe_name(output->config.pipe),
+		     plane->index);
+
+		igt_atomic_fill_plane_props(display, plane, DRM_MODE_OBJECT_PLANE,
+					    IGT_NUM_PLANE_PROPS, igt_plane_prop_names);
+
+		/* populate plane req */
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_CRTC_ID, 0);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_FB_ID, 0);
+
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_SRC_X, IGT_FIXED(0, 0));
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_SRC_Y, IGT_FIXED(0, 0));
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_SRC_W, IGT_FIXED(0, 0));
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_SRC_H, IGT_FIXED(0, 0));
+
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_CRTC_X, 0);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_CRTC_Y, 0);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_CRTC_W, 0);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_CRTC_H, 0);
+
+	} else if (plane->fb_changed || plane->position_changed ||
+			plane->size_changed) {
+
+		src_x = IGT_FIXED(plane->fb->src_x,0); /* src_x */
+		src_y = IGT_FIXED(plane->fb->src_y,0); /* src_y */
+		src_w = IGT_FIXED(plane->fb->src_w,0); /* src_w */
+		src_h = IGT_FIXED(plane->fb->src_h,0); /* src_h */
+		crtc_x = plane->crtc_x;
+		crtc_y = plane->crtc_y;
+		crtc_w = plane->crtc_w;
+		crtc_h = plane->crtc_h;
+
+		LOG(display,
+		    "%s: Atomic fill %s.%d, fb %u, src = (%d, %d) "
+		    "%ux%u dst = (%u, %u) %ux%u\n",
+		    igt_output_name(output),
+		    kmstest_pipe_name(output->config.pipe),
+		    plane->index,
+		    fb_id,
+		    src_x >> 16, src_y >> 16, src_w >> 16, src_h >> 16,
+		    crtc_x, crtc_y, crtc_w, crtc_h);
+
+		igt_atomic_fill_plane_props(display, plane, DRM_MODE_OBJECT_PLANE,
+					    IGT_NUM_PLANE_PROPS, igt_plane_prop_names);
+
+
+		/* populate plane req */
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_CRTC_ID, crtc_id);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_FB_ID, fb_id);
+
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_SRC_X, src_x);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_SRC_Y, src_y);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_SRC_W, src_w);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_SRC_H, src_h);
+
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_CRTC_X, crtc_x);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_CRTC_Y, crtc_y);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_CRTC_W, crtc_w);
+		igt_atomic_populate_plane_req(req, plane, IGT_PLANE_CRTC_H, crtc_h);
+
+	}
+
+	plane->fb_changed = false;
+	plane->position_changed = false;
+	plane->size_changed = false;
+
+
+	if (plane->rotation_changed) {
+		ret = igt_plane_set_property(plane, plane->rotation_property,
+					     plane->rotation);
+
+		plane->rotation_changed = false;
+		CHECK_RETURN(ret, fail_on_error);
+	}
+
+	return 0;
+}
+
+
+
 /*
  * Commit position and fb changes to a DRM plane via the SetPlane ioctl; if the
  * DRM call to program the plane fails, we'll either fail immediately (for
@@ -1549,6 +1761,7 @@ static int igt_primary_plane_commit_legacy(igt_plane_t *primary,
  */
 static int igt_plane_commit(igt_plane_t *plane,
 			    igt_output_t *output,
+			    drmModeAtomicReq *req,
 			    enum igt_commit_style s,
 			    bool fail_on_error)
 {
@@ -1558,7 +1771,10 @@ static int igt_plane_commit(igt_plane_t *plane,
 		return igt_primary_plane_commit_legacy(plane, output,
 						       fail_on_error);
 	} else {
-		return igt_drm_plane_commit(plane, output, fail_on_error);
+		if (s == COMMIT_ATOMIC)
+			return igt_atomic_plane_fill(plane, output, req, fail_on_error);
+		else
+			return igt_drm_plane_commit(plane, output, fail_on_error);
 	}
 }
 
@@ -1581,8 +1797,26 @@ static int igt_output_commit(igt_output_t *output,
 	int i;
 	int ret;
 	bool need_wait_for_vblank = false;
+	drmModeAtomicReq *req = NULL;
 
 	pipe = igt_output_get_driving_pipe(output);
+
+	if (s == COMMIT_ATOMIC) {
+		do_or_die(drmSetClientCap(display->drm_fd,
+					  DRM_CLIENT_CAP_ATOMIC, 1));
+
+		req = drmModeAtomicAlloc();
+		drmModeAtomicSetCursor(req, 0);
+
+		igt_atomic_fill_pipe_props(output, pipe, DRM_MODE_OBJECT_CRTC,
+					   IGT_NUM_PIPE_PROPS, igt_pipe_props_names);
+
+		/* populate CRTC req */
+		igt_atomic_populate_pipe_req(req, output, pipe,
+					     IGT_PIPE_MODE_ID, pipe->id);
+		igt_atomic_populate_pipe_req(req, output, pipe,
+					     IGT_PIPE_ACTIVE, pipe->enabled);
+	}
 
 	if (pipe->background_changed) {
 		igt_crtc_set_property(output, pipe->background_property,
@@ -1597,8 +1831,15 @@ static int igt_output_commit(igt_output_t *output,
 		if (plane->fb_changed || plane->position_changed || plane->size_changed)
 			need_wait_for_vblank = true;
 
-		ret = igt_plane_commit(plane, output, s, fail_on_error);
+		ret = igt_plane_commit(plane, output, req, s, fail_on_error);
 		CHECK_RETURN(ret, fail_on_error);
+	}
+
+	if (s == COMMIT_ATOMIC) {
+		ret = drmModeAtomicCommit(display->drm_fd, req, 0, NULL);
+		CHECK_RETURN(ret, fail_on_error);
+		LOG(display, "drmModeAtomicCommit()\n");
+		drmModeAtomicFree(req);
 	}
 
 	/*
