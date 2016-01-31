@@ -170,6 +170,7 @@ TESTS_progs = \
 	gen3_render_tiledy_blits \
 	gen7_forcewake_mt \
 	kms_3d \
+	kms_hdmi_inject \
 	kms_fence_pin_leak \
 	kms_force_connector_basic \
 	kms_pwrite_crc \
