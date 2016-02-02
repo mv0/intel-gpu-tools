@@ -61,6 +61,12 @@ hdmi_inject_4k(int drm_fd, drmModeConnector *connector)
 	int fb_id;
 	struct igt_fb fb;
 	uint8_t found_4k_mode = 0;
+	uint32_t devid;
+
+	devid = intel_get_drm_devid(drm_fd);
+
+	/* 4K requires at least HSW */
+	igt_require(IS_HASWELL(devid) || IS_BROADWELL(devid));
 
 	kmstest_edid_add_4k(igt_kms_get_base_edid(), EDID_LENGTH, &edid,
 			    &length);
@@ -143,6 +149,8 @@ igt_main
 
 		connector = get_connector(drm_fd, res);
 		igt_require(connector);
+
+
 	}
 
 	igt_subtest("inject-4k")
