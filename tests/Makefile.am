@@ -100,6 +100,7 @@ gen7_forcewake_mt_CFLAGS = $(AM_CFLAGS) $(THREAD_CFLAGS)
 gen7_forcewake_mt_LDADD = $(LDADD) -lpthread
 gem_userptr_blits_CFLAGS = $(AM_CFLAGS) $(THREAD_CFLAGS)
 gem_userptr_blits_LDADD = $(LDADD) -lpthread
+drv_module_reload_basic_LDADD = $(LDADD) $(KMOD_LIBS) $(PROCPS_LIBS)
 
 gem_wait_LDADD = $(LDADD) -lrt
 kms_flip_LDADD = $(LDADD) -lrt -lpthread
